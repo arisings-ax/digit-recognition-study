@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Handwritten Digit Recognizer</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 40px;
+  }
+  #canvas {
+    border: 2px solid #333;
+    cursor: crosshair;
+    touch-action: none;
+    background: white;
+  }
+  .controls {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  button {
+    font-size: 16px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+  #result {
+    font-size: 20px;
+    min-width: 220px;
+  }
+</style>
+</head>
+<body>
+  <h1>Handwritten Digit Recognizer</h1>
+  <canvas id="canvas" width="280" height="280"></canvas>
+  <div class="controls">
+    <button id="predict-btn">Predict</button>
+    <button id="clear-btn">Clear</button>
+    <span id="result">Draw a digit (0-9)</span>
+  </div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+ctx.fillStyle = "white";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+ctx.lineWidth = 20;
+ctx.lineCap = "round";
+ctx.lineJoin = "round";
+ctx.strokeStyle = "black";
+
+let drawing = false;
+let lastX = null;
+let lastY = null;
+
+function pointerPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const point = e.touches ? e.touches[0] : e;
+  return [point.clientX - rect.left, point.clientY - rect.top];
+}
+
+function startStroke(e) {
+  e.preventDefault();
+  drawing = true;
+  [lastX, lastY] = pointerPos(e);
+}
+
+function moveStroke(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const [x, y] = pointerPos(e);
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  [lastX, lastY] = [x, y];
+}
+
+function endStroke(e) {
+  drawing = false;
+  lastX = lastY = null;
+}
+
+canvas.addEventListener("mousedown", startStroke);
+canvas.addEventListener("mousemove", moveStroke);
+canvas.addEventListener("mouseup", endStroke);
+canvas.addEventListener("mouseleave", endStroke);
+canvas.addEventListener("touchstart", startStroke);
+canvas.addEventListener("touchmove", moveStroke);
+canvas.addEventListener("touchend", endStroke);
+
+document.getElementById("clear-btn").addEventListener("click", () => {
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  document.getElementById("result").textContent = "Draw a digit (0-9)";
+});
+
+document.getElementById("predict-btn").addEventListener("click", async () => {
+  const resultEl = document.getElementById("result");
+  resultEl.textContent = "Predicting...";
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    const response = await fetch("/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: dataUrl }),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      resultEl.textContent = `Error: ${err.error || response.statusText}`;
+      return;
+    }
+    const data = await response.json();
+    resultEl.textContent = `Prediction: ${data.prediction} (${data.confidence.toFixed(1)}%)`;
+  } catch (e) {
+    resultEl.textContent = `Error: ${e.message}`;
+  }
+});
+</script>
+</body>
+</html>
